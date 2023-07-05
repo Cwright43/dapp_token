@@ -1,0 +1,136 @@
+[1mdiff --git a/contracts/Token.sol b/contracts/Token.sol[m
+[1mindex d29bf15..5b82359 100644[m
+[1m--- a/contracts/Token.sol[m
+[1m+++ b/contracts/Token.sol[m
+[36m@@ -41,15 +41,24 @@[m [mcontract Token {[m
+ {[m
+ 	//Deduct balance from sender[m
+ 	require(balanceOf[msg.sender] >= _value); // Evaluates to either TRUE or FALSE[m
+[31m-	require(_to != address(0));[m
+ [m
+[31m-	balanceOf[msg.sender] = balanceOf[msg.sender] - _value;[m
+[32m+[m	[32m_transfer(msg.sender, _to, _value);[m
+ [m
+[31m-	balanceOf[_to] = balanceOf[_to] + _value;[m
+[32m+[m	[32mreturn true;[m
+[32m+[m	[32m}[m
+ [m
+[31m-	emit Transfer(msg.sender, _to, _value);[m
+[32m+[m	[32mfunction _transfer([m
+[32m+[m		[32maddress _from,[m
+[32m+[m		[32maddress _to,[m
+[32m+[m		[32muint256 _value[m
+[32m+[m	[32m) internal {[m
+[32m+[m		[32mrequire(_to != address(0));[m
+[32m+[m
+[32m+[m		[32mbalanceOf[_from] = balanceOf[_from] - _value;[m
+[32m+[m		[32mbalanceOf[_to] = balanceOf[_to] + _value;[m
+[32m+[m
+[32m+[m	[32memit Transfer(_from, _to, _value);[m
+ [m
+[31m-	return true;[m
+ 	}[m
+ [m
+ 	function approve(address _spender, uint256 _value) public returns(bool success) {[m
+[36m@@ -62,7 +71,21 @@[m [mcontract Token {[m
+ 		return true;[m
+ 		}[m
+ [m
+[32m+[m	[32mfunction transferFrom(address _from, address _to, uint256 _value) public returns(bool success) {[m
+[32m+[m
+[32m+[m	[32m// check approval[m
+[32m+[m	[32mrequire(_value <= balanceOf[_from]);[m
+[32m+[m	[32mrequire(_value <= allowance[_from][msg.sender]);[m
+ [m
+[32m+[m	[32m// Reset GAY[m
+[32m+[m	[32mallowance[_from][msg.sender] = allowance[_from][msg.sender] - _value;[m
+[32m+[m
+[32m+[m	[32m// spend tokens[m
+[32m+[m	[32m_transfer(_from, _to, _value);[m
+[32m+[m
+[32m+[m	[32mreturn true;[m
+[32m+[m
+[32m+[m	[32m}[m
+ [m
+ [m
+ [m
+[1mdiff --git a/test/Token.js b/test/Token.js[m
+[1mindex 140ceb2..7f93971 100644[m
+[1m--- a/test/Token.js[m
+[1m+++ b/test/Token.js[m
+[36m@@ -46,7 +46,7 @@[m [mdescribe('Token', () => {[m
+ [m
+   })[m
+ [m
+[31m-describe('Sending Tokens', () => {[m
+[32m+[m[32m   describe('Sending Tokens', () => {[m
+     let amount, transaction, result[m
+ [m
+     describe('Success', () => {[m
+[36m@@ -92,7 +92,7 @@[m [mdescribe('Sending Tokens', () => {[m
+ [m
+ [m
+     [m
+[31m-    })[m
+[32m+[m[32m})[m
+ [m
+    describe('Approving Tokens', () => {[m
+     let amount, transaction, result[m
+[36m@@ -127,15 +127,56 @@[m [mdescribe('Sending Tokens', () => {[m
+   })[m
+ [m
+   [m
+[31m-[m
+ })[m
+ [m
+[32m+[m[32m   describe('Delegated Token Transfers', () => {[m
+[32m+[m[32m    let amount, transaction, result[m
+[32m+[m
+[32m+[m[32m    beforeEach(async () => {[m
+[32m+[m[32m      amount = tokens(100)[m
+[32m+[m[32m      transaction = await token.connect(deployer).approve(exchange.address, amount)[m
+[32m+[m[32m      result = await transaction.wait()[m
+[32m+[m[32m    })[m
+ [m
+ [m
+[32m+[m[32m    describe('Success', () =>{[m
+ [m
+[32m+[m[32m    beforeEach(async () => {[m
+[32m+[m[32m      transaction = await token.connect(exchange).transferFrom(deployer.address, receiver.address, amount)[m
+[32m+[m[32m      result = await transaction.wait()[m
+[32m+[m[32m    })[m
+ [m
+[32m+[m[32m    it('Transfers token balances', async () => {[m
+[32m+[m[32m      expect(await token.balanceOf(deployer.address)).to.be.equal(ethers.utils.parseUnits('999900', 'ether'))[m
+[32m+[m[32m      expect(await token.balanceOf(receiver.address)).to.be.equal(amount)[m
+[32m+[m[32m    })[m
+ [m
+[32m+[m[32m    it('resets the allowance', async () => {[m
+[32m+[m[32m      expect(await token.allowance(deployer.address, exchange.address)).to.be.equal(0)[m
+[32m+[m[32m    })[m
+ [m
+[32m+[m[32m    it('emits a Transfer event GAAAAY', async () => {[m
+[32m+[m[32m      const event = result.events[0][m
+[32m+[m[32m      expect(event.event).to.equal('Transfer')[m
+[32m+[m
+[32m+[m[32m      const args = event.args[m
+[32m+[m[32m      expect(args.from).to.equal(deployer.address)[m
+[32m+[m[32m      expect(args.to).to.equal(receiver.address)[m
+[32m+[m[32m      expect(args.value).to.equal(amount)[m
+[32m+[m[32m    })[m
+[32m+[m
+[32m+[m[32m    })[m
+[32m+[m
+[32m+[m[32m    describe('Failure', async () => {[m
+[32m+[m[41m      [m
+[32m+[m[32m    it('rejects insufficient GAY amount', async () => {[m
+[32m+[m
+[32m+[m[32m      const invalidAmount = tokens(100000000) // 100 MILLS[m
+[32m+[m[32m      await expect(token.connect(exchange).transferFrom(deployer.address, receiver.address, invalidAmount)).to.be.reverted[m
+[32m+[m
+[32m+[m[32m    })[m
+[32m+[m[32m   })[m
+   })[m
+ [m
+ [m
+[32m+[m[32m})[m
